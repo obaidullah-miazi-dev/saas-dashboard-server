@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -19,67 +20,83 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   },
 });
+
+const JWT_SECRET = process.env.JWT_SECRET;
+
 async function run() {
   try {
     await client.connect();
     const db = client.db("Saas-DB");
     const usersCollection = db.collection("users");
 
-    app.post("/user", async (req, res) => {
-      const userInfo = req.body;
-      const email = userInfo.email;
-      const password = userInfo.password;
+//    register api 
+    app.post("/register", async (req, res) => {
+      const { email, password } = req.body;
       const existUser = await usersCollection.findOne({ email });
       if (existUser) {
-        return res.send({ message: "this user already exist" });
+        return res.send({ message: "This user already exists" });
       }
-      
+
       const saltRounds = 10;
       const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-      const newUser = {
-        email: email,
-        password: hashedPassword,
-      };
-      const result = await usersCollection.insertOne(newUser);
-      res.send(result);
+      const newUser = { email, password: hashedPassword };
+      await usersCollection.insertOne(newUser);
+      res.send({ message: "Registration successful" });
     });
 
-    app.post('/loginUser', async(req,res)=>{
-        try{
-            const userInfo = req.body 
-        const {email,password} = userInfo
-        const user = await usersCollection.findOne({email})
-        console.log(user)
-        if(!user){
-            return res.send({message: 'user not found'})
+ 
+    // login api 
+    app.post("/loginUser", async (req, res) => {
+      try {
+        const { email, password } = req.body;
+        const user = await usersCollection.findOne({ email });
+        if (!user) {
+          return res.status(401).send({ message: "User not found" });
         }
 
-        const isValidPassword = await bcrypt.compare(password,user.password)
-        if(!isValidPassword){
-            return res.send({message: 'password incorrect'})
+        const isValidPassword = await bcrypt.compare(password, user.password);
+        if (!isValidPassword) {
+          return res.status(401).send({ message: "Password incorrect" });
         }
 
-        console.log(user._id)
-         res.send({ message: "Login successful", userId: user._id });
-        }
-        catch(error){
-            console.log(error)
-            return res.status(500).send({message:'something went wrong'})
-        }
+        // jwt token generate 
+        const token = jwt.sign(
+          { userId: user._id, email: user.email },
+          JWT_SECRET,
+          { expiresIn: "1h" }
+        );
 
-    })
+        res.send({ message: "Login successful", token });
 
-    // app.get("/userGet", async (req, res) => {
+      } catch (error) {
+        console.log(error);
+        res.status(500).send({ message: "Something went wrong" });
+      }
+    });
 
-    //   const result = await usersCollection.find().toArray();
-    //   res.send(result);
-    // });
+    const authenticate = (req, res, next) => {
+      const authHeader = req.headers.authorization;
+      if (!authHeader) return res.status(401).send({ message: "No token provided" });
+
+      const token = authHeader.split(" ")[1];
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.user = decoded;
+        next();
+      } catch (err) {
+        return res.status(403).send({ message: "Invalid or expired token" });
+      }
+    };
+
+    app.get("/profile", authenticate, async (req, res) => {
+     
+      const user = await usersCollection.findOne({ _id: new require("mongodb").ObjectId(req.user.userId) });
+      res.send({ email: user.email });
+    });
 
     await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    console.log("Connected to MongoDB!");
   } finally {
     // await client.close();
   }
@@ -91,5 +108,5 @@ app.get("/", (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`);
+  console.log(`Server listening on port ${port}`);
 });
