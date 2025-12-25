@@ -45,7 +45,30 @@ async function run() {
       res.send(result);
     });
 
-    
+    app.post('/loginUser', async(req,res)=>{
+        try{
+            const userInfo = req.body 
+        const {email,password} = userInfo
+        const user = await usersCollection.findOne({email})
+        console.log(user)
+        if(!user){
+            return res.send({message: 'user not found'})
+        }
+
+        const isValidPassword = await bcrypt.compare(password,user.password)
+        if(!isValidPassword){
+            return res.send({message: 'password incorrect'})
+        }
+
+        console.log(user._id)
+         res.send({ message: "Login successful", userId: user._id });
+        }
+        catch(error){
+            console.log(error)
+            return res.status(500).send({message:'something went wrong'})
+        }
+
+    })
 
     // app.get("/userGet", async (req, res) => {
 
