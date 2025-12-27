@@ -8,3 +8,13 @@ const findUserByEmail = (email)=>{
     return usersCollection.findOne({email})
 }
 
+const createUser = (user)=>{
+    return usersCollection.insertOne(user)
+}
+
+module.exports = {
+    initUsersCollection,
+    findUserByEmail,
+    createUser
+}
+
