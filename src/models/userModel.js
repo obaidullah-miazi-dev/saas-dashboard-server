@@ -12,9 +12,14 @@ const createUser = (user)=>{
     return usersCollection.insertOne(user)
 }
 
+const findUserById = (id)=>{
+    return usersCollection.findOne({_id: id})
+}
+
 module.exports = {
     initUsersCollection,
     findUserByEmail,
-    createUser
+    createUser,
+    findUserById
 }
 
