@@ -10,7 +10,7 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const uri = process.env.MONOGODB_URI;
 
 const client = new MongoClient(uri, {
@@ -29,7 +29,7 @@ async function run() {
     const db = client.db("Saas-DB");
     const usersCollection = db.collection("users");
 
-//    register api 
+    //    register api
     app.post("/register", async (req, res) => {
       const { email, password } = req.body;
       const existUser = await usersCollection.findOne({ email });
@@ -40,13 +40,12 @@ async function run() {
       const saltRounds = 10;
       const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-      const newUser = { email, password: hashedPassword };
-      await usersCollection.insertOne(newUser);
-      res.send({ message: "Registration successful" });
+      const newUser = { email, password: hashedPassword, role: "user" };
+      const result = await usersCollection.insertOne(newUser);
+      res.send(result, { message: "Registration successful" });
     });
 
- 
-    // login api 
+    // login api
     app.post("/loginUser", async (req, res) => {
       try {
         const { email, password } = req.body;
@@ -60,15 +59,20 @@ async function run() {
           return res.status(401).send({ message: "Password incorrect" });
         }
 
-        // jwt token generate 
+        // jwt token generate
         const token = jwt.sign(
-          { userId: user._id, email: user.email },
+          {
+            userId: user._id,
+            email: user.email,
+            role: user.role,
+          },
           JWT_SECRET,
           { expiresIn: "1h" }
         );
 
-        res.send({ message: "Login successful", token });
+        // console.log(token)
 
+        res.send({ message: "Login successful", token });
       } catch (error) {
         console.log(error);
         res.status(500).send({ message: "Something went wrong" });
@@ -77,9 +81,11 @@ async function run() {
 
     const authenticate = (req, res, next) => {
       const authHeader = req.headers.authorization;
-      if (!authHeader) return res.status(401).send({ message: "No token provided" });
+      if (!authHeader)
+        return res.status(401).send({ message: "No token provided" });
 
       const token = authHeader.split(" ")[1];
+      // console.log(token)
       try {
         const decoded = jwt.verify(token, JWT_SECRET);
         req.user = decoded;
@@ -90,9 +96,10 @@ async function run() {
     };
 
     app.get("/profile", authenticate, async (req, res) => {
-     
-      const user = await usersCollection.findOne({ _id: new require("mongodb").ObjectId(req.user.userId) });
-      res.send({ email: user.email });
+      const user = await usersCollection.findOne({
+        _id: new ObjectId(req.user.userId),
+      });
+      res.send({ email: user.email, role: user.role });
     });
 
     await client.db("admin").command({ ping: 1 });
