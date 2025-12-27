@@ -2,7 +2,11 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { ObjectId } = require("mongodb");
 
-const { findUserByEmail, createUser } = require("../models/userModel");
+const {
+  findUserByEmail,
+  createUser,
+  findUserById,
+} = require("../models/userModel");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -49,4 +53,9 @@ exports.login = async (req, res) => {
     { expiresIn: "5h" }
   );
   res.send({ message: "login successfully", token });
+};
+
+exports.profile = async (req, res) => {
+  const user = await findUserById(new ObjectId(req.user.userId));
+  res.send({ email: user.email, role: user.role });
 };
